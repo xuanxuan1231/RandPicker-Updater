@@ -1,0 +1,46 @@
+name: Build
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.10'
+          architecture: x64
+          cache: 'pip'
+          cache-dependency-path: |
+            **/requirements*.txt
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Build
+        uses: Nuitka/Nuitka-Action@main
+        with:
+          mode: onefile
+          script-name: main.py
+          output-file: Updater
+          enable-plugins: pyqt6
+          disable-console: true
+          product-name: RandPicker Updater
+          file-version: 0.0.0.1
+          product-version: 0.0.0.1
+          file-description: RandPicker 更新助理
+
+      - name: Upload
+        uses: actions/upload-artifact@v4.4.2
+        with:
+          name: RandPicker
+          path: Updater.exe
