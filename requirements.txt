@@ -1,1 +1,4 @@
-pyqt6
+PyQt6~=6.8.1
+PyQt6-Fluent-Widgets~=1.7.6
+loguru~=0.7.3
+requests~=2.32.3
