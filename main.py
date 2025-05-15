@@ -205,12 +205,25 @@ class UpdatePage(QWidget):
                 total_files = len(update_file.namelist())
                 for index, file in enumerate(update_file.namelist()):
                     update_file.extract(file)
-                    progress = int(((index + 1) / total_files) * 24)
+                    progress = int(((index + 1) / total_files) * 18)
                     self.progressBar.setValue(progress + 75)
                     QApplication.processEvents()
                 update_file.close()
                 logger.info("解压完成。")
                 self.captionLabel.setText("更新文件解压完成。")
+            
+            # 移动更新文件
+            if os.path.exists("RandPicker"):
+                total_files = len(os.listdir("RandPicker"))
+                self.captionLabel.setText("正在移动更新文件。")
+                for index, file in enumerate(os.listdir("RandPicker")):
+                    shutil.move(os.path.join("RandPicker", file), os.path.join(".", file))
+                    progress = int(((index + 1) / total_files) * 14)
+                    self.progressBar.setValue(progress + 83)
+                    QApplication.processEvents()
+                shutil.rmtree("RandPicker")
+                logger.info("移动完成。")
+                self.captionLabel.setText("更新文件移动完成。")
             
             # 清理文件
             if os.path.exists("update.zip"):
