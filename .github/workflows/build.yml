@@ -2,6 +2,9 @@ name: Build
 
 on:
   workflow_dispatch:
+  push:
+    tags:
+      - v*
 
 concurrency:
   group: build-${{ github.ref }}
@@ -26,6 +29,17 @@ jobs:
         run: |
           pip install -r requirements.txt
 
+      - name: Set version
+        id: set_version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag_name="${GITHUB_REF#refs/tags/}"
+            echo "version=${tag_name:1}" >> $GITHUB_ENV
+          else
+            echo "version=0.0.0.1" >> $GITHUB_ENV
+          fi
+
       - name: Build
         uses: Nuitka/Nuitka-Action@main
         with:
@@ -35,8 +49,8 @@ jobs:
           enable-plugins: pyqt6
           disable-console: true
           product-name: RandPicker Updater
-          file-version: 0.0.0.1
-          product-version: 0.0.0.1
+          file-version: ${{ env.version }}
+          product-version: ${{ env.version }}
           file-description: RandPicker 更新助理
 
       - name: Pre-Upload
