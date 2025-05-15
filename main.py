@@ -1,11 +1,14 @@
 import sys
 import time
 import argparse
+import os
+import shutil
+import zipfile
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QApplication, QStackedWidget, QVBoxLayout, QWidget, QSpacerItem, QSizePolicy
-from qfluentwidgets import setTheme, Theme, TitleLabel, PrimaryPushButton, BodyLabel, PushButton, TextBrowser
+from PyQt6.QtWidgets import QApplication, QStackedWidget, QVBoxLayout, QHBoxLayout, QWidget, QSpacerItem, QSizePolicy
+from qfluentwidgets import setTheme, Theme, TitleLabel, PrimaryPushButton, BodyLabel, PushButton, TextBrowser, CaptionLabel, ProgressBar
 from qframelesswindow import FramelessWindow, StandardTitleBar
 import requests
 
@@ -104,10 +107,154 @@ class PreUpdatePage(QWidget):
         buttonLayout.addWidget(self.nextButton)
         self.layout.addWidget(self.titleLabel)
         self.layout.addWidget(self.contentLabel)
-        if not is_latest:
+        if not is_latest or latest['version'] == '0.0.0':
             self.layout.addWidget(self.changelog)
         self.layout.addSpacerItem(self.spacer)
         self.layout.addLayout(buttonLayout)
+
+class ConfirmPage(QWidget):
+    nextPage = pyqtSignal()
+    previousPage = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+        self.titleLabel = TitleLabel("确认更新")
+        self.contentLabel = BodyLabel("请确认您要更新 RandPicker 吗？")
+        self.spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.nextButton = PrimaryPushButton("更新")
+        self.previousButton = PushButton("上一页")
+        self.nextButton.clicked.connect(lambda: self.nextPage.emit())
+        self.previousButton.clicked.connect(lambda: self.previousPage.emit())
+        self.layout.addWidget(self.titleLabel)
+        self.layout.addWidget(self.contentLabel)
+        self.layout.addSpacerItem(self.spacer)
+        self.layout.addWidget(self.nextButton)
+        self.layout.addWidget(self.previousButton)
+
+
+class UpdatePage(QWidget):
+    nextPage = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+        self.titleLabel = TitleLabel("正在更新 RandPicker")
+        self.contentLabel = BodyLabel("请稍候......")
+        self.spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.captionLabel = CaptionLabel("正在准备更新")
+        self.progressBar = ProgressBar()
+        self.progressBar.setRange(0, 100)
+        self.layout.addWidget(self.titleLabel)
+        self.layout.addWidget(self.contentLabel)
+        self.layout.addSpacerItem(self.spacer)
+        self.layout.addWidget(self.captionLabel)
+        self.layout.addWidget(self.progressBar)
+
+    def prepare(self):
+        global latest
+        DOWNLOAD_URL = latest['url']
+
+        try: 
+            # 备份旧版本
+            logger.info("开始备份旧版本。")
+            self.captionLabel.setText("备份旧版本文件。")
+            backup_folder = "backup"
+            if not os.path.exists(backup_folder):
+                os.makedirs(backup_folder)
+            for file_name in os.listdir("."):
+                if file_name not in ["config.ini", "students.json", "Updater.exe"] and os.path.isfile(file_name):
+                    shutil.move(file_name, os.path.join(backup_folder, file_name))
+                if file_name not in ["backup"] and os.path.isdir(file_name):
+                    shutil.move(file_name, os.path.join(backup_folder, file_name))
+            
+            self.progressBar.setValue(15)
+            logger.info("旧版本备份完成。")
+
+            # 下载更新
+            if DOWNLOAD_URL:
+                logger.info(f'准备从 {DOWNLOAD_URL} 下载更新。')
+                try:
+                    self.captionLabel.setText("正在下载更新文件。")
+                    response = requests.get(DOWNLOAD_URL, stream=True)
+                    response.raise_for_status()
+                    total_size = int(response.headers.get('content-length', 0))
+                    downloaded_size = 0
+
+                    with open("update.zip", "wb") as file:
+                        for chunk in response.iter_content(chunk_size=1024):
+                            if chunk:
+                                file.write(chunk)
+                                downloaded_size += len(chunk)
+                                progress = int((downloaded_size / total_size) * 60)
+                                self.progressBar.setValue(progress + 15)
+                                QApplication.processEvents()
+
+                    logger.info("文件下载完成。")
+                    self.captionLabel.setText("更新文件下载完成。")
+                except Exception as e:
+                    logger.error(f"下载更新时发生错误: {e}")
+                    self.captionLabel.setText("下载更新时发生错误。")
+                
+            # 解压更新
+            if os.path.exists("update.zip"):
+                update_file = zipfile.ZipFile("update.zip")
+                self.captionLabel.setText("正在解压更新文件。")
+                total_files = len(update_file.namelist())
+                for index, file in enumerate(update_file.namelist()):
+                    update_file.extract(file)
+                    progress = int(((index + 1) / total_files) * 24)
+                    self.progressBar.setValue(progress + 75)
+                    QApplication.processEvents()
+                update_file.close()
+                logger.info("解压完成。")
+                self.captionLabel.setText("更新文件解压完成。")
+            
+            # 清理文件
+            if os.path.exists("update.zip"):
+                self.captionLabel.setText("正在清理更新文件。")
+                os.remove("update.zip")
+                QApplication.processEvents()
+                self.progressBar.setValue(100)
+                logger.info("清理完成。")
+            
+            self.nextPage.emit()
+
+        except Exception as e:
+            logger.error(f"更新时发生错误: {e}")
+            self.captionLabel.setText("更新时发生错误。")
+            return
+        
+class FinishPage(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.layout = QVBoxLayout()
+        self.buttonLayout = QHBoxLayout()
+        self.setLayout(self.layout)
+        self.titleLabel = TitleLabel("更新完成")
+        self.contentLabel = BodyLabel("RandPicker 更新助理已完成更新。")
+        self.spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.nextButton = PrimaryPushButton("退出 RandPicker 更新助理")
+        self.nextButton.clicked.connect(lambda: QApplication.quit())
+        self.openNewButton = PushButton("打开新版本的 RandPicker")
+        self.openNewButton.clicked.connect(self.open_new_version)
+        self.buttonLayout.addWidget(self.openNewButton)
+        self.buttonLayout.addWidget(self.nextButton)
+        self.layout.addWidget(self.titleLabel)
+        self.layout.addWidget(self.contentLabel)
+        self.layout.addSpacerItem(self.spacer)
+        self.layout.addWidget(self.nextButton)
+        self.layout.addLayout(self.buttonLayout)
+
+    def open_new_version(self):
+        if os.path.exists("RandPicker.exe"):
+            os.system("start RandPicker.exe")
+
+        QApplication.quit()
+
+
 class MainWindow(FramelessWindow):
     prepare = pyqtSignal()
 
@@ -119,9 +266,7 @@ class MainWindow(FramelessWindow):
         self.setWindowTitle("RandPicker 更新助理")
         self.setWindowIcon(QIcon("./assets/Logo.png"))
 
-        #self.setMinimumSize(400, 300)
-        #self.setFixedSize(400, 300)
-        self.resize(400, 300)
+        self.setMinimumSize(400, 300)  # 设置最小窗口大小
         self.setFixedSize(400, 300)  # 设置固定窗口大小，禁止调整大小
         self.titleBar.minBtn.setVisible(False)
         self.titleBar.maxBtn.setVisible(False)
@@ -132,10 +277,16 @@ class MainWindow(FramelessWindow):
         # 创建页面
         self.page1 = PreparingPage()
         self.page2 = PreUpdatePage()
+        self.page3 = ConfirmPage()
+        self.page4 = UpdatePage()
+        self.page5 = FinishPage()
 
         # 将页面添加到 QStackedWidget
         self.stacked_widget.addWidget(self.page1)
         self.stacked_widget.addWidget(self.page2)
+        self.stacked_widget.addWidget(self.page3)
+        self.stacked_widget.addWidget(self.page4)
+        self.stacked_widget.addWidget(self.page5)
 
         # 布局
         main_layout = QVBoxLayout()
@@ -150,11 +301,16 @@ class MainWindow(FramelessWindow):
         self.prepare.connect(lambda: self.page1.prepare())
         self.page1.nextPage.connect(self.next_page)
         self.page2.nextPage.connect(self.next_page)
+        self.page3.nextPage.connect(self.next_page)
+        self.page4.nextPage.connect(self.next_page)
         self.page2.previousPage.connect(self.previous_page)
+        self.page3.previousPage.connect(self.previous_page)
 
     def next_page(self):
         current_index = self.stacked_widget.currentIndex()
-        eval(f"self.page{current_index + 2}.prepare()")
+        next_page = getattr(self, f"page{current_index + 2}", None)
+        if getattr(next_page, "prepare", None) is not None:
+            next_page.prepare()
         if current_index < self.stacked_widget.count() - 1:
             self.stacked_widget.setCurrentIndex(current_index + 1)
             logger.debug(f"从 {current_index} 切换到 {current_index + 1}。")
