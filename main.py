@@ -236,9 +236,9 @@ class FinishPage(QWidget):
         self.titleLabel = TitleLabel("更新完成")
         self.contentLabel = BodyLabel("RandPicker 更新助理已完成更新。")
         self.spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.nextButton = PrimaryPushButton("退出 RandPicker 更新助理")
+        self.nextButton = PrimaryPushButton("退出更新助理")
         self.nextButton.clicked.connect(lambda: QApplication.quit())
-        self.openNewButton = PushButton("打开新版本的 RandPicker")
+        self.openNewButton = PushButton("启动 RandPicker")
         self.openNewButton.clicked.connect(self.open_new_version)
         self.buttonLayout.addWidget(self.openNewButton)
         self.buttonLayout.addWidget(self.nextButton)
@@ -308,12 +308,12 @@ class MainWindow(FramelessWindow):
 
     def next_page(self):
         current_index = self.stacked_widget.currentIndex()
-        next_page = getattr(self, f"page{current_index + 2}", None)
-        if getattr(next_page, "prepare", None) is not None:
-            next_page.prepare()
         if current_index < self.stacked_widget.count() - 1:
             self.stacked_widget.setCurrentIndex(current_index + 1)
             logger.debug(f"从 {current_index} 切换到 {current_index + 1}。")
+            next_page = getattr(self, f"page{current_index + 2}", None)
+            if getattr(next_page, "prepare", None) is not None:
+                next_page.prepare()
             return
         logger.debug("已到达最后一页。没有切换。")
 
