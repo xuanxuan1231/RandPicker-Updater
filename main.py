@@ -220,6 +220,11 @@ class UpdatePage(QWidget):
     def prepare(self):
         global latest
         DOWNLOAD_URL = latest["url"]
+        BACKUP_URLS = [
+            f"https://ghfast.top/{DOWNLOAD_URL}",
+            f"https://gh-proxy.com/{DOWNLOAD_URL}",
+            f"https://github.moeyy.xyz/{DOWNLOAD_URL}",
+        ]
 
         try:
             # 备份旧版本
@@ -242,29 +247,45 @@ class UpdatePage(QWidget):
             logger.info("旧版本备份完成。")
 
             # 下载更新
+            def download_with_url(url):
+                self.captionLabel.setText(f"正在下载更新文件：{url}")
+                response = requests.get(url, stream=True)
+                response.raise_for_status()
+                total_size = int(response.headers.get("content-length", 0))
+                downloaded_size = 0
+                with open("update.zip", "wb") as file:
+                    for chunk in response.iter_content(chunk_size=1024):
+                        if chunk:
+                            file.write(chunk)
+                            downloaded_size += len(chunk)
+                            progress = int((downloaded_size / total_size) * 60)
+                            self.progressBar.setValue(progress + 15)
+                            QApplication.processEvents()
+                logger.info("文件下载完成。")
+                self.captionLabel.setText("更新文件下载完成。")
+
+            download_success = False
             if DOWNLOAD_URL:
                 logger.info(f"准备从 {DOWNLOAD_URL} 下载更新。")
                 try:
-                    self.captionLabel.setText("正在下载更新文件。")
-                    response = requests.get(DOWNLOAD_URL, stream=True)
-                    response.raise_for_status()
-                    total_size = int(response.headers.get("content-length", 0))
-                    downloaded_size = 0
-
-                    with open("update.zip", "wb") as file:
-                        for chunk in response.iter_content(chunk_size=1024):
-                            if chunk:
-                                file.write(chunk)
-                                downloaded_size += len(chunk)
-                                progress = int((downloaded_size / total_size) * 60)
-                                self.progressBar.setValue(progress + 15)
-                                QApplication.processEvents()
-
-                    logger.info("文件下载完成。")
-                    self.captionLabel.setText("更新文件下载完成。")
+                    download_with_url(DOWNLOAD_URL)
+                    download_success = True
                 except Exception as e:
                     logger.error(f"下载更新时发生错误: {e}")
-                    self.captionLabel.setText("下载更新时发生错误。")
+                    self.captionLabel.setText("主下载源失败，尝试备用下载源……")
+                    QApplication.processEvents()
+                    for backup_url in BACKUP_URLS:
+                        try:
+                            download_with_url(backup_url)
+                            download_success = True
+                            break
+                        except Exception as e2:
+                            logger.error(f"备用下载源 {backup_url} 失败: {e2}")
+                            self.captionLabel.setText("备用下载源失败，尝试下一个……")
+                            QApplication.processEvents()
+            if not download_success:
+                self.captionLabel.setText("下载更新时发生错误。")
+                return
 
             # 解压更新
             if os.path.exists("update.zip"):
@@ -389,6 +410,7 @@ class MainWindow(FramelessWindow):
         self.page2.nextPage.connect(self.next_page)
         self.page3.nextPage.connect(self.next_page)
         self.page4.nextPage.connect(self.next_page)
+        self.page5.nextPage.connect(self.next_page)
         self.page2.previousPage.connect(self.previous_page)
         self.page3.previousPage.connect(self.previous_page)
 
