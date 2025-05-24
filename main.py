@@ -5,10 +5,10 @@ import os
 import shutil
 import zipfile
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QThread
 from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QStackedWidget, QVBoxLayout, QHBoxLayout, QWidget, QSpacerItem, QSizePolicy
-from qfluentwidgets import setTheme, Theme, TitleLabel, PrimaryPushButton, BodyLabel, PushButton, TextBrowser, CaptionLabel, ProgressBar
+from qfluentwidgets import setTheme, Theme, TitleLabel, PrimaryPushButton, BodyLabel, PushButton, TextBrowser, CaptionLabel, ProgressBar, IndeterminateProgressBar
 from qframelesswindow import FramelessWindow, StandardTitleBar
 import requests
 
@@ -26,46 +26,76 @@ origin = 'github'
 class PreparingPage(QWidget):
     nextPage = pyqtSignal()
 
+    class PrepareWorker(QThread):
+        finished = pyqtSignal(dict)
+        error = pyqtSignal(str)
+        def __init__(self, origin):
+            super().__init__()
+            self.origin = origin
+        def run(self):
+            import requests
+            try:
+                if self.origin == 'oss':
+                    MANIFEST_URL = "https://oss.may.pp.ua/latest.json"
+                else:
+                    MANIFEST_URL = "https://api.github.com/repos/xuanxuan1231/RandPicker/releases/latest"
+                response = requests.get(MANIFEST_URL, timeout=5)
+                response.raise_for_status()
+                data = response.json()
+                if self.origin == 'oss':
+                    # oss接口结构兼容处理
+                    latest = {
+                        'version': data.get('tag_name', data.get('version', '0.0.0')),
+                        'url': data.get('assets', [{}])[0].get('browser_download_url', data.get('url')),
+                        'changelog': data.get('body', data.get('changelog', ''))
+                    }
+                else:
+                    latest = {
+                        'version': data.get('tag_name'),
+                        'url': data.get('assets')[0].get('browser_download_url'),
+                        'changelog': data.get('body')
+                    }
+                self.finished.emit(latest)
+            except Exception as e:
+                self.error.emit(str(e))
+
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout()
         self.titleLabel = TitleLabel("请稍候......")
         self.contentLabel = BodyLabel("正在准备 RandPicker 更新助理。")
         self.spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.nextButton = PrimaryPushButton("Go to Page Two")
+        self.bar = IndeterminateProgressBar(start=True)
         layout.addWidget(self.titleLabel)
         layout.addWidget(self.contentLabel)
         layout.addSpacerItem(self.spacer)
-        layout.addWidget(self.nextButton)
+        layout.addWidget(self.bar)
         self.setLayout(layout)
+        self.worker = None
 
     def prepare(self):
         global latest, origin
-        
-        if origin == 'oss':
-            MANIFEST_URL = "https://oss.may.pp.ua/latest.json"
-        else:
-            MANIFEST_URL = "https://api.github.com/repos/xuanxuan1231/RandPicker/releases/latest"
-        try:
-            response = requests.get(MANIFEST_URL, timeout=5)
-            response.raise_for_status()
-            DOWNLOAD_URL = response.json().get('assets')[0].get('browser_download_url')
+        self.bar.start()
+        self.worker = self.PrepareWorker(origin)
+        self.worker.finished.connect(self.on_prepare_finished)
+        self.worker.error.connect(self.on_prepare_error)
+        self.worker.start()
 
-            latest = {
-                'version': response.json().get('tag_name'),
-                'url': DOWNLOAD_URL,
-                'changelog': response.json().get('body')
-            }
-            
-        except Exception as e:
-            logger.error(f'检查更新时发生错误。{e}')
-            latest = {
-                'version': "0.0.0",
-                'url': None,
-                'changelog': f"出错了。{e}"
-            }
-        
+    def on_prepare_finished(self, result):
+        global latest
+        latest = result
+        self.bar.stop()
+        self.nextPage.emit()
 
+    def on_prepare_error(self, err):
+        global latest
+        logger.error(f'检查更新时发生错误。{err}')
+        latest = {
+            'version': "0.0.0",
+            'url': None,
+            'changelog': f"出错了。{err}"
+        }
+        self.bar.stop()
         self.nextPage.emit()
 
 
