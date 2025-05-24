@@ -1,5 +1,4 @@
 import sys
-import time
 import argparse
 import os
 import shutil
@@ -7,8 +6,27 @@ import zipfile
 
 from PyQt6.QtCore import Qt, pyqtSignal, QThread
 from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QApplication, QStackedWidget, QVBoxLayout, QHBoxLayout, QWidget, QSpacerItem, QSizePolicy
-from qfluentwidgets import setTheme, Theme, TitleLabel, PrimaryPushButton, BodyLabel, PushButton, TextBrowser, CaptionLabel, ProgressBar, IndeterminateProgressBar
+from PyQt6.QtWidgets import (
+    QApplication,
+    QStackedWidget,
+    QVBoxLayout,
+    QHBoxLayout,
+    QWidget,
+    QSpacerItem,
+    QSizePolicy,
+)
+from qfluentwidgets import (
+    setTheme,
+    Theme,
+    TitleLabel,
+    PrimaryPushButton,
+    BodyLabel,
+    PushButton,
+    TextBrowser,
+    CaptionLabel,
+    ProgressBar,
+    IndeterminateProgressBar,
+)
 from qframelesswindow import FramelessWindow, StandardTitleBar
 import requests
 
@@ -16,12 +34,14 @@ from loguru import logger
 
 # 适配高DPI缩放
 QApplication.setHighDpiScaleFactorRoundingPolicy(
-    Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
+    Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
+)
 
 window = None
 latest = {}
 is_latest = True
-origin = 'github'
+origin = "github"
+
 
 class PreparingPage(QWidget):
     nextPage = pyqtSignal()
@@ -29,31 +49,36 @@ class PreparingPage(QWidget):
     class PrepareWorker(QThread):
         finished = pyqtSignal(dict)
         error = pyqtSignal(str)
+
         def __init__(self, origin):
             super().__init__()
             self.origin = origin
+
         def run(self):
             import requests
+
             try:
-                if self.origin == 'oss':
+                if self.origin == "oss":
                     MANIFEST_URL = "https://oss.may.pp.ua/latest.json"
                 else:
                     MANIFEST_URL = "https://api.github.com/repos/xuanxuan1231/RandPicker/releases/latest"
                 response = requests.get(MANIFEST_URL, timeout=5)
                 response.raise_for_status()
                 data = response.json()
-                if self.origin == 'oss':
+                if self.origin == "oss":
                     # oss接口结构兼容处理
                     latest = {
-                        'version': data.get('tag_name', data.get('version', '0.0.0')),
-                        'url': data.get('assets', [{}])[0].get('browser_download_url', data.get('url')),
-                        'changelog': data.get('body', data.get('changelog', ''))
+                        "version": data.get("tag_name", data.get("version", "0.0.0")),
+                        "url": data.get("assets", [{}])[0].get(
+                            "browser_download_url", data.get("url")
+                        ),
+                        "changelog": data.get("body", data.get("changelog", "")),
                     }
                 else:
                     latest = {
-                        'version': data.get('tag_name'),
-                        'url': data.get('assets')[0].get('browser_download_url'),
-                        'changelog': data.get('body')
+                        "version": data.get("tag_name"),
+                        "url": data.get("assets")[0].get("browser_download_url"),
+                        "changelog": data.get("body"),
                     }
                 self.finished.emit(latest)
             except Exception as e:
@@ -64,7 +89,9 @@ class PreparingPage(QWidget):
         layout = QVBoxLayout()
         self.titleLabel = TitleLabel("请稍候......")
         self.contentLabel = BodyLabel("正在准备 RandPicker 更新助理。")
-        self.spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.spacer = QSpacerItem(
+            20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self.bar = IndeterminateProgressBar(start=True)
         layout.addWidget(self.titleLabel)
         layout.addWidget(self.contentLabel)
@@ -89,12 +116,8 @@ class PreparingPage(QWidget):
 
     def on_prepare_error(self, err):
         global latest
-        logger.error(f'检查更新时发生错误。{err}')
-        latest = {
-            'version': "0.0.0",
-            'url': None,
-            'changelog': f"出错了。{err}"
-        }
+        logger.error(f"检查更新时发生错误。{err}")
+        latest = {"version": "0.0.0", "url": None, "changelog": f"出错了。{err}"}
         self.bar.stop()
         self.nextPage.emit()
 
@@ -112,35 +135,42 @@ class PreUpdatePage(QWidget):
         buttonLayout = QVBoxLayout()
         global latest, is_latest
         print(latest)
-        if not is_latest and latest['version'] != "0.0.0":
+        if not is_latest and latest["version"] != "0.0.0":
             self.titleLabel = TitleLabel("有新更新。")
             self.contentLabel = BodyLabel("有新版本待更新。")
             self.changelog = TextBrowser()
-            self.changelog.setMarkdown(latest['changelog'])
-            self.spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            self.changelog.setMarkdown(latest["changelog"])
+            self.spacer = QSpacerItem(
+                20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            )
             self.nextButton = PrimaryPushButton("更新")
             self.nextButton.clicked.connect(lambda: self.nextPage.emit())
-        elif latest['version'] == '0.0.0':
+        elif latest["version"] == "0.0.0":
             self.titleLabel = TitleLabel("出错了。")
             self.contentLabel = BodyLabel("请退出 RandPicker 更新助理，然后再试一次。")
             self.changelog = TextBrowser()
-            self.changelog.setMarkdown(latest['changelog'])
-            self.spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            self.changelog.setMarkdown(latest["changelog"])
+            self.spacer = QSpacerItem(
+                20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            )
             self.nextButton = PrimaryPushButton("退出 RandPicker 更新助理")
             self.nextButton.clicked.connect(lambda: QApplication.quit())
         else:
             self.titleLabel = TitleLabel("无可用更新。")
             self.contentLabel = BodyLabel("您的 RandPicker 已是最新版本。")
-            self.spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            self.spacer = QSpacerItem(
+                20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            )
             self.nextButton = PrimaryPushButton("退出 RandPicker 更新助理")
             self.nextButton.clicked.connect(lambda: QApplication.quit())
         buttonLayout.addWidget(self.nextButton)
         self.layout.addWidget(self.titleLabel)
         self.layout.addWidget(self.contentLabel)
-        if not is_latest or latest['version'] == '0.0.0':
+        if not is_latest or latest["version"] == "0.0.0":
             self.layout.addWidget(self.changelog)
         self.layout.addSpacerItem(self.spacer)
         self.layout.addLayout(buttonLayout)
+
 
 class ConfirmPage(QWidget):
     nextPage = pyqtSignal()
@@ -152,7 +182,9 @@ class ConfirmPage(QWidget):
         self.setLayout(self.layout)
         self.titleLabel = TitleLabel("确认更新")
         self.contentLabel = BodyLabel("请确认您要更新 RandPicker 吗？")
-        self.spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.spacer = QSpacerItem(
+            20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self.nextButton = PrimaryPushButton("更新")
         self.previousButton = PushButton("上一页")
         self.nextButton.clicked.connect(lambda: self.nextPage.emit())
@@ -173,7 +205,9 @@ class UpdatePage(QWidget):
         self.setLayout(self.layout)
         self.titleLabel = TitleLabel("正在更新 RandPicker")
         self.contentLabel = BodyLabel("请稍候......")
-        self.spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.spacer = QSpacerItem(
+            20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self.captionLabel = CaptionLabel("正在准备更新")
         self.progressBar = ProgressBar()
         self.progressBar.setRange(0, 100)
@@ -185,9 +219,9 @@ class UpdatePage(QWidget):
 
     def prepare(self):
         global latest
-        DOWNLOAD_URL = latest['url']
+        DOWNLOAD_URL = latest["url"]
 
-        try: 
+        try:
             # 备份旧版本
             logger.info("开始备份旧版本。")
             self.captionLabel.setText("备份旧版本文件。")
@@ -195,22 +229,26 @@ class UpdatePage(QWidget):
             if not os.path.exists(backup_folder):
                 os.makedirs(backup_folder)
             for file_name in os.listdir("."):
-                if file_name not in ["config.ini", "students.json", "Updater.exe"] and os.path.isfile(file_name):
+                if file_name not in [
+                    "config.ini",
+                    "students.json",
+                    "Updater.exe",
+                ] and os.path.isfile(file_name):
                     shutil.move(file_name, os.path.join(backup_folder, file_name))
                 if file_name not in ["backup"] and os.path.isdir(file_name):
                     shutil.move(file_name, os.path.join(backup_folder, file_name))
-            
+
             self.progressBar.setValue(15)
             logger.info("旧版本备份完成。")
 
             # 下载更新
             if DOWNLOAD_URL:
-                logger.info(f'准备从 {DOWNLOAD_URL} 下载更新。')
+                logger.info(f"准备从 {DOWNLOAD_URL} 下载更新。")
                 try:
                     self.captionLabel.setText("正在下载更新文件。")
                     response = requests.get(DOWNLOAD_URL, stream=True)
                     response.raise_for_status()
-                    total_size = int(response.headers.get('content-length', 0))
+                    total_size = int(response.headers.get("content-length", 0))
                     downloaded_size = 0
 
                     with open("update.zip", "wb") as file:
@@ -227,7 +265,7 @@ class UpdatePage(QWidget):
                 except Exception as e:
                     logger.error(f"下载更新时发生错误: {e}")
                     self.captionLabel.setText("下载更新时发生错误。")
-                
+
             # 解压更新
             if os.path.exists("update.zip"):
                 update_file = zipfile.ZipFile("update.zip")
@@ -241,20 +279,22 @@ class UpdatePage(QWidget):
                 update_file.close()
                 logger.info("解压完成。")
                 self.captionLabel.setText("更新文件解压完成。")
-            
+
             # 移动更新文件
             if os.path.exists("RandPicker"):
                 total_files = len(os.listdir("RandPicker"))
                 self.captionLabel.setText("正在移动更新文件。")
                 for index, file in enumerate(os.listdir("RandPicker")):
-                    shutil.move(os.path.join("RandPicker", file), os.path.join(".", file))
+                    shutil.move(
+                        os.path.join("RandPicker", file), os.path.join(".", file)
+                    )
                     progress = int(((index + 1) / total_files) * 14)
                     self.progressBar.setValue(progress + 83)
                     QApplication.processEvents()
                 shutil.rmtree("RandPicker")
                 logger.info("移动完成。")
                 self.captionLabel.setText("更新文件移动完成。")
-            
+
             # 清理文件
             if os.path.exists("update.zip"):
                 self.captionLabel.setText("正在清理更新文件。")
@@ -262,14 +302,15 @@ class UpdatePage(QWidget):
                 QApplication.processEvents()
                 self.progressBar.setValue(100)
                 logger.info("清理完成。")
-            
+
             self.nextPage.emit()
 
         except Exception as e:
             logger.error(f"更新时发生错误: {e}")
             self.captionLabel.setText("更新时发生错误。")
             return
-        
+
+
 class FinishPage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -278,7 +319,9 @@ class FinishPage(QWidget):
         self.setLayout(self.layout)
         self.titleLabel = TitleLabel("更新完成")
         self.contentLabel = BodyLabel("RandPicker 更新助理已完成更新。")
-        self.spacer = QSpacerItem(20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.spacer = QSpacerItem(
+            20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
         self.nextButton = PrimaryPushButton("退出更新助理")
         self.nextButton.clicked.connect(lambda: QApplication.quit())
         self.openNewButton = PushButton("启动 RandPicker")
@@ -368,6 +411,7 @@ class MainWindow(FramelessWindow):
             return
         logger.debug("已到达第一页。没有切换。")
 
+
 def main():
     app = QApplication(sys.argv)
     setTheme(Theme.AUTO)
@@ -376,13 +420,26 @@ def main():
     window.prepare.emit()
     logger.info("应用程序已启动。")
     sys.exit(app.exec())
-            
+
+
 if __name__ == "__main__":
     argparser = argparse.ArgumentParser(description="RandPicker 更新助理")
     argparser.add_argument(
-        "-o", "--origin", type=str, help="更新源", default="github",)
-    argparser.add_argument("-l", "--latest", type=str, help="是否有最新版本", choices=["true", "false"], default="true")
+        "-o",
+        "--origin",
+        type=str,
+        help="更新源",
+        default="github",
+    )
+    argparser.add_argument(
+        "-l",
+        "--latest",
+        type=str,
+        help="是否有最新版本",
+        choices=["true", "false"],
+        default="true",
+    )
     args = argparser.parse_args()
     is_latest = args.latest == "true"
-    origin = 'github' if args.origin != 'oss' else 'oss'
+    origin = "github" if args.origin != "oss" else "oss"
     main()
