@@ -42,6 +42,14 @@ latest = {}
 is_latest = True
 origin = "github"
 
+logger.add(
+    "./log/Updater_{{time}}.log",
+    rotation="10 MB",
+    encoding="utf-8",
+    retention="3 days",
+    compression="zip",
+)
+
 
 class PreparingPage(QWidget):
     nextPage = pyqtSignal()
@@ -240,7 +248,7 @@ class UpdatePage(QWidget):
                     "Updater.exe",
                 ] and os.path.isfile(file_name):
                     shutil.move(file_name, os.path.join(backup_folder, file_name))
-                if file_name not in ["backup"] and os.path.isdir(file_name):
+                if file_name not in ["backup", "log"] and os.path.isdir(file_name):
                     shutil.move(file_name, os.path.join(backup_folder, file_name))
 
             self.progressBar.setValue(15)
@@ -259,6 +267,9 @@ class UpdatePage(QWidget):
                             file.write(chunk)
                             downloaded_size += len(chunk)
                             progress = int((downloaded_size / total_size) * 60)
+                            logger.info(
+                                f"下载进度：{progress}% ({downloaded_size}/{total_size})"
+                            )
                             self.progressBar.setValue(progress + 15)
                             QApplication.processEvents()
                 logger.info("文件下载完成。")
@@ -295,6 +306,7 @@ class UpdatePage(QWidget):
                 for index, file in enumerate(update_file.namelist()):
                     update_file.extract(file)
                     progress = int(((index + 1) / total_files) * 18)
+                    logger.info(f"解压进度：{progress}% ({index + 1}/{total_files})")
                     self.progressBar.setValue(progress + 75)
                     QApplication.processEvents()
                 update_file.close()
@@ -310,6 +322,7 @@ class UpdatePage(QWidget):
                         os.path.join("RandPicker", file), os.path.join(".", file)
                     )
                     progress = int(((index + 1) / total_files) * 14)
+                    logger.info(f"移动进度：{progress}% ({index + 1}/{total_files})")
                     self.progressBar.setValue(progress + 83)
                     QApplication.processEvents()
                 shutil.rmtree("RandPicker")
