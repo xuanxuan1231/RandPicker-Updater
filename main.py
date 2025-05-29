@@ -3,6 +3,7 @@ import argparse
 import os
 import shutil
 import zipfile
+from packaging.version import Version
 
 from PyQt6.QtCore import Qt, pyqtSignal, QThread
 from PyQt6.QtGui import QIcon
@@ -29,6 +30,7 @@ from qfluentwidgets import (
 )
 from qframelesswindow import FramelessWindow, StandardTitleBar
 import requests
+import win32api
 
 from loguru import logger
 
@@ -63,7 +65,15 @@ class PreparingPage(QWidget):
             self.origin = origin
 
         def run(self):
-            import requests
+            global APP_VERSION
+
+            # 获取 RandPicker 的当前版本
+            info = win32api.GetFileVersionInfo("./RandPicker.exe", "\\")
+            ms = info["FileVersionMS"]
+            ls = info["FileVersionLS"]
+            APP_VERSION = Version(
+                f"{win32api.HIWORD(ms)}.{win32api.LOWORD(ms)}.{win32api.HIWORD(ls)}"
+            )
 
             try:
                 if self.origin == "oss":
@@ -142,10 +152,14 @@ class PreUpdatePage(QWidget):
     def prepare(self):
         buttonLayout = QVBoxLayout()
         global latest, is_latest
-        print(latest)
-        if not is_latest and latest["version"] != "0.0.0":
+        logger.debug(f"检查更新结果：{latest}。当前版本：{APP_VERSION}。")
+        if Version(latest["version"]) < APP_VERSION and APP_VERSION != Version(
+            "0.0.0"
+        ):  # 有新版本
             self.titleLabel = TitleLabel("有新更新。")
-            self.contentLabel = BodyLabel("有新版本待更新。")
+            self.contentLabel = BodyLabel(
+                f"有新版本待更新。v{str(APP_VERSION)} -> {latest['version']}。"
+            )
             self.changelog = TextBrowser()
             self.changelog.setMarkdown(latest["changelog"])
             self.spacer = QSpacerItem(
@@ -153,7 +167,7 @@ class PreUpdatePage(QWidget):
             )
             self.nextButton = PrimaryPushButton("更新")
             self.nextButton.clicked.connect(lambda: self.nextPage.emit())
-        elif latest["version"] == "0.0.0":
+        elif latest["url"] is None:  # 检查更新失败
             self.titleLabel = TitleLabel("出错了。")
             self.contentLabel = BodyLabel("请退出 RandPicker 更新助理，然后再试一次。")
             self.changelog = TextBrowser()
@@ -174,7 +188,7 @@ class PreUpdatePage(QWidget):
         buttonLayout.addWidget(self.nextButton)
         self.layout.addWidget(self.titleLabel)
         self.layout.addWidget(self.contentLabel)
-        if not is_latest or latest["version"] == "0.0.0":
+        if self.changelog:  # 已是最新版本或检查更新失败
             self.layout.addWidget(self.changelog)
         self.layout.addSpacerItem(self.spacer)
         self.layout.addLayout(buttonLayout)
