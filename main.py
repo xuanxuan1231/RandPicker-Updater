@@ -68,12 +68,16 @@ class PreparingPage(QWidget):
             global APP_VERSION
 
             # 获取 RandPicker 的当前版本
-            info = win32api.GetFileVersionInfo("./RandPicker.exe", "\\")
-            ms = info["FileVersionMS"]
-            ls = info["FileVersionLS"]
-            APP_VERSION = Version(
-                f"{win32api.HIWORD(ms)}.{win32api.LOWORD(ms)}.{win32api.HIWORD(ls)}"
-            )
+            try:
+                info = win32api.GetFileVersionInfo("./RandPicker.exe", "\\")
+                ms = info["FileVersionMS"]
+                ls = info["FileVersionLS"]
+                APP_VERSION = Version(
+                    f"{win32api.HIWORD(ms)}.{win32api.LOWORD(ms)}.{win32api.HIWORD(ls)}"
+                )
+            except Exception as e:
+                logger.error(f"获取 RandPicker 版本时出错误。{str(e)}")
+                APP_VERSION = Version("0.0.0")
 
             try:
                 if self.origin == "oss":
@@ -153,7 +157,7 @@ class PreUpdatePage(QWidget):
         buttonLayout = QVBoxLayout()
         global latest, is_latest
         logger.debug(f"检查更新结果：{latest}。当前版本：{APP_VERSION}。")
-        if Version(latest["version"]) < APP_VERSION and APP_VERSION != Version(
+        if Version(latest["version"]) > APP_VERSION and APP_VERSION != Version(
             "0.0.0"
         ):  # 有新版本
             self.titleLabel = TitleLabel("有新更新。")
@@ -167,11 +171,15 @@ class PreUpdatePage(QWidget):
             )
             self.nextButton = PrimaryPushButton("更新")
             self.nextButton.clicked.connect(lambda: self.nextPage.emit())
-        elif latest["url"] is None:  # 检查更新失败
+        elif latest["url"] is None or APP_VERSION == Version("0.0.0"):  # 检查更新失败
             self.titleLabel = TitleLabel("出错了。")
             self.contentLabel = BodyLabel("请退出 RandPicker 更新助理，然后再试一次。")
             self.changelog = TextBrowser()
-            self.changelog.setMarkdown(latest["changelog"])
+            self.changelog.setMarkdown(
+                latest["changelog"]
+                if latest["url"] is None
+                else "没有获取到 RandPicker 的版本。\n请检查当前文件夹下是否有 `RandPicker.exe`。"
+            )
             self.spacer = QSpacerItem(
                 20, 40, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
             )
@@ -188,7 +196,7 @@ class PreUpdatePage(QWidget):
         buttonLayout.addWidget(self.nextButton)
         self.layout.addWidget(self.titleLabel)
         self.layout.addWidget(self.contentLabel)
-        if self.changelog:  # 已是最新版本或检查更新失败
+        if getattr(self, "changelog", False):  # 已是最新版本或检查更新失败
             self.layout.addWidget(self.changelog)
         self.layout.addSpacerItem(self.spacer)
         self.layout.addLayout(buttonLayout)
@@ -437,7 +445,6 @@ class MainWindow(FramelessWindow):
         self.page2.nextPage.connect(self.next_page)
         self.page3.nextPage.connect(self.next_page)
         self.page4.nextPage.connect(self.next_page)
-        self.page5.nextPage.connect(self.next_page)
         self.page2.previousPage.connect(self.previous_page)
         self.page3.previousPage.connect(self.previous_page)
 
