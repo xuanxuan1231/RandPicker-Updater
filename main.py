@@ -298,6 +298,7 @@ class UpdatePage(QWidget):
                 self.captionLabel.setText("更新文件下载完成。")
 
             download_success = False
+            global origin
             if DOWNLOAD_URL:
                 logger.info(f"准备从 {DOWNLOAD_URL} 下载更新。")
                 try:
@@ -305,6 +306,9 @@ class UpdatePage(QWidget):
                     download_success = True
                 except Exception as e:
                     logger.error(f"下载更新时发生错误: {e}")
+                    if origin == "oss":
+                        self.captionLabel.setText("下载更新时发生错误。")
+                        return
                     self.captionLabel.setText("主下载源失败，尝试备用下载源……")
                     QApplication.processEvents()
                     for backup_url in BACKUP_URLS:
