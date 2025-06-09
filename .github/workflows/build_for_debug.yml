@@ -1,0 +1,44 @@
+name: Build (Debug Only)
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12.10'
+          architecture: x64
+          cache: 'pip'
+          cache-dependency-path: |
+            **/requirements*.txt
+
+      - name: Install Dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build
+        run: |
+          pyinstaller --noconfirm --onedir --name=RandPicker main.py
+
+      # - name: Package
+      #   run: |
+      #     curl -o zip.exe -L http://www.stahlworks.com/dev/zip.exe
+      #     xcopy build\main.dist\* RandPicker\ /e/y
+      #     ./zip -r -q RandPicker.zip RandPicker
+
+      - name: Upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: RandPicker
+          path: dist/**
