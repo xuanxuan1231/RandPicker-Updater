@@ -1,4 +1,4 @@
-name: Build (Debug Only)
+name: Build with PyInstaller (Debug Only)
 
 on:
   workflow_dispatch:
@@ -40,5 +40,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: RandPicker
+          name: RP-Updater-Debug-P
           path: dist/**
